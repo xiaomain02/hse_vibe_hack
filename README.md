@@ -8,7 +8,7 @@ Frame App — это десктопное приложение для автом
 ---
 # Видео
 
-https://drive.google.com/file/d/1tfEVsrAouNaEgez9Ea4zfB96poUveMVH/view?usp=sharing
+https://disk.yandex.ru/d/EJYNnruoXf2XlQ
 
 # 🚀 Возможности
 
