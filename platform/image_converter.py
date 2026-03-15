@@ -5,7 +5,7 @@ from PIL.Image import Image as PILImage
 from pathlib import Path
 import logging
 from typing import Optional
-from config import Config
+from platform.config import Config
 
 logger = logging.getLogger(__name__)
 

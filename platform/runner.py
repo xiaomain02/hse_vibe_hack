@@ -35,7 +35,11 @@ def setup_logging(paths: Paths):
     logger.info(f"🚀 PhotoAnalyzer v{Config.VERSION} запущен")
 
 def cli_mode(folder_path: str, output_dir: Optional[str] = None):
-    """CLI режим — вызывает ИРИНИН analyze_folder()"""
+    """CLI режим — анализ ПАПКИ (НЕ архива!)"""
+    # ✅ АБСОЛЮТНЫЙ ИМПОРТ
+    from core.pipeline import analyze_folder
+    from platform.config import Config, Paths  # ← АБСОЛЮТНЫЙ!
+    
     paths = Config.get_paths()
     setup_logging(paths)
     
@@ -47,14 +51,14 @@ def cli_mode(folder_path: str, output_dir: Optional[str] = None):
     output = Path(output_dir or str(paths.reports / folder.name))
     output.mkdir(exist_ok=True, parents=True)
     
-    logger.info(f"📁 Анализ папки: {folder}")
+    logger.info(f"📁 Анализ папки: {folder}")  # ✅ ПАПКА!
     logger.info(f"📤 Результат: {output}")
     
     try:
         result_stats = analyze_folder(str(folder), str(output))
         logger.info(f"✅ Анализ завершён: {result_stats}")
     except Exception as e:
-        logger.error(f"💥 Ошибка анализа: {e}", exc_info=True)
+        logger.error(f"💥 Ошибка: {e}", exc_info=True)
         sys.exit(1)
 
 def gui_mode():
