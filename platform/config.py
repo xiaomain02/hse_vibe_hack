@@ -4,6 +4,8 @@ import sys
 from pathlib import Path
 from typing import Tuple, NamedTuple
 from datetime import timedelta
+from datetime import datetime, timedelta
+
 
 class Paths(NamedTuple):
     jobs: Path
