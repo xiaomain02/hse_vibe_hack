@@ -3,7 +3,7 @@ from pathlib import Path
 
 def save_lines(lines: list[str], output_path: Path) -> None:
     """
-    Сохраняет список строк в txt.
+    Сохраняет список строк в txt-файл.
     """
     output_path.parent.mkdir(parents=True, exist_ok=True)
 

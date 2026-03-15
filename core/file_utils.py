@@ -1,13 +1,10 @@
 from pathlib import Path
-from typing import Iterable
-
 from platform.config import Config
 
 
 def find_images(folder: Path) -> list[Path]:
     """
     Ищет все поддерживаемые изображения в папке и подпапках.
-    Поддерживаемые расширения берутся из platform.config.Config.
     """
     folder = Path(folder)
 
@@ -24,8 +21,3 @@ def find_images(folder: Path) -> list[Path]:
             image_files.append(path)
 
     return sorted(image_files)
-
-
-def relative_names(paths: Iterable[Path], base_folder: Path) -> list[str]:
-    base_folder = Path(base_folder)
-    return [str(path.relative_to(base_folder)) for path in paths]
