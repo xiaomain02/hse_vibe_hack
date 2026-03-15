@@ -5,6 +5,8 @@ import numpy as np
 import mediapipe as mp
 import rawpy
 import os
+
+
 # from mediapipe import solutions as mp_solutions
 
 # ---------- Highlight detection (16-bit) ----------
@@ -15,7 +17,7 @@ def detect_blown_highlights(img):
         white = 255.0
 
     b, g, r = cv2.split(img.astype(np.float32))
-    luminance = 0.114*b + 0.587*g + 0.299*r
+    luminance = 0.114 * b + 0.587 * g + 0.299 * r
 
     threshold = 0.96 * white
     highlight_mask = (luminance > threshold).astype(np.uint8)
@@ -53,18 +55,66 @@ def detect_blown_highlights(img):
     score = area_ratio * (1 / (1 + mean_variance))
     return score
 
-# ---------- Blur metrics ----------
-def variance_of_laplacian(img):
-    return cv2.Laplacian(img, cv2.CV_64F).var()
 
-def tenengrad(img):
+# ---------- Blur metrics ----------
+import cv2
+import numpy as np
+
+
+def variance_of_laplacian(img):
+    lap = cv2.Laplacian(img, cv2.CV_64F)
+    score = np.var(lap)
+    return score
+
+
+def tenengrad(img, gradient_threshold=15):
     gx = cv2.Sobel(img, cv2.CV_64F, 1, 0, ksize=3)
     gy = cv2.Sobel(img, cv2.CV_64F, 0, 1, ksize=3)
-    g = np.sqrt(gx**2 + gy**2)
+
+    g = np.sqrt(gx ** 2 + gy ** 2)
+
+    # suppress noise gradients
+    g[g < gradient_threshold] = 0
+
     return np.mean(g)
 
+
+def preprocess(img):
+    """
+    Light denoising while preserving edges
+    """
+    img = cv2.GaussianBlur(img, (3, 3), 0)
+    return img
+
+
 def blur_score(img):
-    return 0.6 * variance_of_laplacian(img) + 0.4 * tenengrad(img)
+    img = preprocess(img)
+
+    scores = []
+
+    # multi-scale evaluation reduces noise sensitivity
+    for scale in [1.0, 0.5, 0.25]:
+
+        if scale != 1.0:
+            scaled = cv2.resize(img, None, fx=scale, fy=scale,
+                                interpolation=cv2.INTER_AREA)
+        else:
+            scaled = img
+
+        lap = variance_of_laplacian(scaled)
+        ten = tenengrad(scaled)
+
+        score = 0.6 * lap + 0.4 * ten
+        scores.append(score)
+
+    # robust aggregation
+    final_score = np.median(scores)
+
+    print(f"Blur scores per scale: {scores}")
+    print(f"Final blur score: {final_score}")
+
+    return final_score
+
 
 # ---------- Blur checks ----------
 def face_is_blurry(gray, bbox, w, h):
@@ -72,7 +122,7 @@ def face_is_blurry(gray, bbox, w, h):
     y = int(bbox.ymin * h)
     bw = int(bbox.width * w)
     bh = int(bbox.height * h)
-    face = gray[y:y+bh, x:x+bw]
+    face = gray[y:y + bh, x:x + bw]
     # print(f"Face size: {face.size}")
     if face.size < 100:
         return True
@@ -80,9 +130,12 @@ def face_is_blurry(gray, bbox, w, h):
     print(f"Face blur score: {score}")
     return score < 20
 
+
 def image_is_blurry(gray):
     score = blur_score(gray)
-    return score < 100
+    print(f"Blur score: {score}")
+    return score < 20
+
 
 # ---------- Image loading and conversion ----------
 # def load_and_convert_image(path):
@@ -118,7 +171,6 @@ def image_is_blurry(gray):
 
 def load_raw_fast(path, downsample=4):
     with rawpy.imread(path) as raw:
-
         # Get Bayer RAW sensor data
         raw_img = raw.raw_image_visible.astype(np.float32)
 
@@ -194,10 +246,3 @@ def check_image_quality(path):
                 return False
 
     return True
-
-
-# ---------- Пример использования ----------
-if __name__ == "__main__":
-    path = r"C:\Users\Ivan\Documents\Learning\hacks\hse_vibe_hack\KPO_4814.NEF"
-    result = check_image_quality(path)
-    print(f"Качество изображения: {'хорошее' if result else 'плохое'}")
