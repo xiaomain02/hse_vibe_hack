@@ -54,9 +54,4 @@ class Config:
             if datetime.now().timestamp() - temp_file.stat().st_mtime > cutoff.total_seconds():
                 temp_file.unlink()
 
-    # TIFF конвертация
-    TIFF_QUALITY = 100      # Без потерь
-    TIFF_COMPRESSION = 'NONE'  # или 'LZW' для сжатия
-    MAX_RESOLUTION = (2048, 2048)  # Для CV анализа
-    SUPPORTED_INPUT = {'.jpg', '.jpeg', '.png', '.cr2', '.nef', '.arw', '.raf'}
-    TIFF_OUTPUT = '.tif'
+
