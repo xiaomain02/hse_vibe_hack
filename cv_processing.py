@@ -1,0 +1,157 @@
+import cv2
+import numpy as np
+import mediapipe as mp
+import rawpy
+import os
+from mediapipe import solutions as mp_solutions
+# ---------- Highlight detection (16-bit) ----------
+def detect_blown_highlights(img):
+    if img.dtype == np.uint16:
+        white = 65535.0
+    else:
+        white = 255.0
+
+    b, g, r = cv2.split(img.astype(np.float32))
+    luminance = 0.114*b + 0.587*g + 0.299*r
+
+    threshold = 0.96 * white
+    highlight_mask = (luminance > threshold).astype(np.uint8)
+
+    num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(
+        highlight_mask, connectivity=8
+    )
+
+    min_area = 50
+    valid_regions = []
+
+    for i in range(1, num_labels):
+        area = stats[i, cv2.CC_STAT_AREA]
+        if area > min_area:
+            valid_regions.append(i)
+
+    gray = luminance / white
+    lap = cv2.Laplacian(gray, cv2.CV_32F)
+
+    gradient_variances = []
+    for region_id in valid_regions:
+        region_mask = (labels == region_id)
+        values = lap[region_mask]
+        if len(values) > 0:
+            gradient_variances.append(np.var(values))
+
+    if len(gradient_variances) == 0:
+        return 0.0
+
+    mean_variance = np.mean(gradient_variances)
+    highlight_area = np.sum(highlight_mask)
+    total_pixels = highlight_mask.size
+    area_ratio = highlight_area / total_pixels
+
+    score = area_ratio * (1 / (1 + mean_variance))
+    return score
+
+# ---------- Blur metrics ----------
+def variance_of_laplacian(img):
+    return cv2.Laplacian(img, cv2.CV_64F).var()
+
+def tenengrad(img):
+    gx = cv2.Sobel(img, cv2.CV_64F, 1, 0, ksize=3)
+    gy = cv2.Sobel(img, cv2.CV_64F, 0, 1, ksize=3)
+    g = np.sqrt(gx**2 + gy**2)
+    return np.mean(g)
+
+def blur_score(img):
+    return 0.6 * variance_of_laplacian(img) + 0.4 * tenengrad(img)
+
+# ---------- Blur checks ----------
+def face_is_blurry(gray, bbox, w, h):
+    x = int(bbox.xmin * w)
+    y = int(bbox.ymin * h)
+    bw = int(bbox.width * w)
+    bh = int(bbox.height * h)
+    face = gray[y:y+bh, x:x+bw]
+    if face.size == 0:
+        return True
+    score = blur_score(face)
+    return score < 120
+
+def image_is_blurry(gray):
+    score = blur_score(gray)
+    return score < 100
+
+# ---------- Image loading and conversion ----------
+def load_and_convert_image(path):
+    ext = os.path.splitext(path)[1].lower()
+    raw_formats = [".cr2", ".nef", ".arw", ".dng", ".raf", ".rw2"]
+
+    img = None
+
+    if ext in raw_formats:
+        try:
+            with rawpy.imread(path) as raw:
+                rgb = raw.postprocess(output_bps=16, no_auto_bright=True)
+            img = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+            # сохраняем TIFF
+            tiff_path = os.path.splitext(path)[0] + "_converted.tiff"
+            cv2.imwrite(tiff_path, img)
+        except rawpy.LibRawFileUnsupportedError:
+            print(f"RAW файл не поддерживается: {path}")
+            return None
+        except Exception as e:
+            print(f"Ошибка при обработке RAW: {e}")
+            return None
+    else:
+        img = cv2.imread(path, cv2.IMREAD_UNCHANGED)
+        if img is None:
+            print(f"Не удалось открыть изображение: {path}")
+            return None
+        tiff_path = os.path.splitext(path)[0] + "_converted.tiff"
+        cv2.imwrite(tiff_path, img)
+
+    return img
+
+# ---------- Main quality check ----------
+def check_image_quality(path):
+    img = load_and_convert_image(path)
+    if img is None:
+        return False
+
+    # ---------- Highlight detection ----------
+    highlight_score = detect_blown_highlights(img)
+    if highlight_score > 0.02:
+        print("Слишком много пересветов")
+        return False
+
+    # ---------- Convert to 8-bit for Mediapipe ----------
+    if img.dtype == np.uint16:
+        img8 = (img / 256).astype(np.uint8)
+    else:
+        img8 = img
+
+    gray = cv2.cvtColor(img8, cv2.COLOR_BGR2GRAY)
+    h, w = img8.shape[:2]
+
+    mp_face = mp.solutions.face_detection
+    with mp_face.FaceDetection(model_selection=1, min_detection_confidence=0.5) as face_detector:
+        results = face_detector.process(cv2.cvtColor(img8, cv2.COLOR_BGR2RGB))
+
+        if results.detections:
+            for detection in results.detections:
+                bbox = detection.location_data.relative_bounding_box
+                if face_is_blurry(gray, bbox, w, h):
+                    print("Лицо размыто")
+                    return False
+        else:
+            if image_is_blurry(gray):
+                print("Изображение размыто")
+                return False
+
+    return True
+
+# ---------- Пример использования ----------
+if __name__ == "__main__":
+    path = r"C:\Users\Space Witch\Desktop\vibe_hack\hse_vibe_hack\KPO_4925.NEF"
+    result = check_image_quality(path)
+    print(f"Качество изображения: {'хорошее' if result else 'плохое'}")
+
+
