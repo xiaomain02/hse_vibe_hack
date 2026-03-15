@@ -3,7 +3,6 @@ import os
 import sys
 from pathlib import Path
 from typing import Tuple, NamedTuple
-from datetime import timedelta
 from datetime import datetime, timedelta
 
 
@@ -21,6 +20,19 @@ class Config:
     MAX_RAM_GB = 4
     MAX_THREADS = 8
     TEMP_TTL_HOURS = 1
+
+    # Поддерживаемые форматы изображений
+    SUPPORTED_INPUT = {
+        ".jpg",
+        ".jpeg",
+        ".png",
+        ".bmp",
+        ".gif",
+        ".webp",
+        ".tif",
+        ".tiff",
+    }
+
     
     @classmethod
     def get_paths(cls) -> Paths:
