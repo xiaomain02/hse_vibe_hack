@@ -1,9 +1,12 @@
+from importlib.resources import path
+
 import cv2
 import numpy as np
 import mediapipe as mp
 import rawpy
 import os
-from mediapipe import solutions as mp_solutions
+# from mediapipe import solutions as mp_solutions
+
 # ---------- Highlight detection (16-bit) ----------
 def detect_blown_highlights(img):
     if img.dtype == np.uint16:
@@ -70,56 +73,93 @@ def face_is_blurry(gray, bbox, w, h):
     bw = int(bbox.width * w)
     bh = int(bbox.height * h)
     face = gray[y:y+bh, x:x+bw]
-    if face.size == 0:
+    # print(f"Face size: {face.size}")
+    if face.size < 100:
         return True
     score = blur_score(face)
-    return score < 120
+    print(f"Face blur score: {score}")
+    return score < 20
 
 def image_is_blurry(gray):
     score = blur_score(gray)
     return score < 100
 
 # ---------- Image loading and conversion ----------
-def load_and_convert_image(path):
-    ext = os.path.splitext(path)[1].lower()
-    raw_formats = [".cr2", ".nef", ".arw", ".dng", ".raf", ".rw2"]
+# def load_and_convert_image(path):
+#     ext = os.path.splitext(path)[1].lower()
+#     raw_formats = [".cr2", ".nef", ".arw", ".dng", ".raf", ".rw2"]
 
-    img = None
+#     img = None
 
-    if ext in raw_formats:
-        try:
-            with rawpy.imread(path) as raw:
-                rgb = raw.postprocess(output_bps=16, no_auto_bright=True)
-            img = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
-            # сохраняем TIFF
-            tiff_path = os.path.splitext(path)[0] + "_converted.tiff"
-            cv2.imwrite(tiff_path, img)
-        except rawpy.LibRawFileUnsupportedError:
-            print(f"RAW файл не поддерживается: {path}")
-            return None
-        except Exception as e:
-            print(f"Ошибка при обработке RAW: {e}")
-            return None
-    else:
-        img = cv2.imread(path, cv2.IMREAD_UNCHANGED)
-        if img is None:
-            print(f"Не удалось открыть изображение: {path}")
-            return None
-        tiff_path = os.path.splitext(path)[0] + "_converted.tiff"
-        cv2.imwrite(tiff_path, img)
+#     if ext in raw_formats:
+#         try:
+#             with rawpy.imread(path) as raw:
+#                 rgb = raw.postprocess(output_bps=16, no_auto_bright=True)
+#             img = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+#             # сохраняем TIFF
+#             tiff_path = os.path.splitext(path)[0] + "_converted.tiff"
+#             cv2.imwrite(tiff_path, img)
+#         except rawpy.LibRawFileUnsupportedError:
+#             print(f"RAW файл не поддерживается: {path}")
+#             return None
+#         except Exception as e:
+#             print(f"Ошибка при обработке RAW: {e}")
+#             return None
+#     else:
+#         img = cv2.imread(path, cv2.IMREAD_UNCHANGED)
+#         if img is None:
+#             print(f"Не удалось открыть изображение: {path}")
+#             return None
+#         tiff_path = os.path.splitext(path)[0] + "_converted.tiff"
+#         cv2.imwrite(tiff_path, img)
 
-    return img
+#     return img
+
+
+def load_raw_fast(path, downsample=4):
+    with rawpy.imread(path) as raw:
+
+        # Get Bayer RAW sensor data
+        raw_img = raw.raw_image_visible.astype(np.float32)
+
+        # Black / white levels
+        black = np.mean(raw.black_level_per_channel)
+        white = raw.white_level
+
+        # Normalize to 0–1
+        norm = (raw_img - black) / (white - black)
+        norm = np.clip(norm, 0, 1)
+
+        # Convert to full 16-bit
+        img16 = (norm * 65535).astype(np.uint16)
+
+        # Downsample
+        if downsample > 1:
+            img16 = img16[::downsample, ::downsample]
+
+    return img16
+
 
 # ---------- Main quality check ----------
 def check_image_quality(path):
-    img = load_and_convert_image(path)
+    ext = os.path.splitext(path)[1].lower()
+    raw_formats = [".cr2", ".nef", ".arw", ".dng", ".raf", ".rw2"]
+
+    if ext in raw_formats:
+        img = load_raw_fast(path)
+        img = cv2.cvtColor(img, cv2.COLOR_BAYER_BG2BGR)
+
+    else:
+        img = cv2.imread(path)
+
     if img is None:
+        print("Не удалось загрузить изображение")
         return False
 
     # ---------- Highlight detection ----------
     highlight_score = detect_blown_highlights(img)
-    if highlight_score > 0.02:
-        print("Слишком много пересветов")
+    if highlight_score > 0.1:
+        print(f"Слишком много пересветов: {highlight_score}")
         return False
 
     # ---------- Convert to 8-bit for Mediapipe ----------
@@ -138,9 +178,16 @@ def check_image_quality(path):
         if results.detections:
             for detection in results.detections:
                 bbox = detection.location_data.relative_bounding_box
+                # print(face_is_blurry(gray, bbox, w, h))
+                ans = False
                 if face_is_blurry(gray, bbox, w, h):
                     print("Лицо размыто")
-                    return False
+                else:
+                    print("Лицо в порядке")
+                    ans = True
+            if not ans:
+                return False
+
         else:
             if image_is_blurry(gray):
                 print("Изображение размыто")
@@ -148,10 +195,9 @@ def check_image_quality(path):
 
     return True
 
+
 # ---------- Пример использования ----------
 if __name__ == "__main__":
-    path = r"C:\Users\Space Witch\Desktop\vibe_hack\hse_vibe_hack\KPO_4925.NEF"
+    path = r"C:\Users\Ivan\Documents\Learning\hacks\hse_vibe_hack\KPO_4814.NEF"
     result = check_image_quality(path)
     print(f"Качество изображения: {'хорошее' if result else 'плохое'}")
-
-
