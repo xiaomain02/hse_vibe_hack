@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Frame App</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>📸 Frame App</h1>
+        <p class="subtitle">Выберите папку с фото для анализа</p>
+        
+        <div class="upload-section">
+            <button class="btn btn-primary" onclick="selectFolder()">
+                Select Folder
+            </button>
+            <p id="folderName" class="file-name"></p>
+        </div>
+        
+        <div class="progress-section" id="progressSection" style="display: none;">
+            <p class="progress-text">Processing... <span id="progressPercent">0</span>%</p>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            <p id="progressPercentRight" class="progress-percent-right">0%</p>
+        </div>
+        
+        <div class="result-section">
+            <button class="btn btn-secondary" id="getTxtBtn" onclick="getTxt()" disabled>
+                get .txt
+            </button>
+            <p id="resultInfo" class="result-info"></p>
+        </div>
+    </div>
+    
+    <script src="/static/script.js"></script>
+</body>
+</html>
