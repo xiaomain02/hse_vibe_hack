@@ -5,6 +5,7 @@ imagehash==4.3.1
 tqdm==4.66.4
 click==8.1.7
 mediapipe==0.10.14
+opencv-python==4.9.0.80
 rawpy
 pywebview
 flask
