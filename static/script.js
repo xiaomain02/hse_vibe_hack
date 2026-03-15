@@ -1,4 +1,3 @@
-// Элементы DOM
 const folderName = document.getElementById('folderName');
 const progressSection = document.getElementById('progressSection');
 const progressPercent = document.getElementById('progressPercent');
@@ -7,11 +6,9 @@ const progressFill = document.getElementById('progressFill');
 const getTxtBtn = document.getElementById('getTxtBtn');
 const resultInfo = document.getElementById('resultInfo');
 
-// Выбор папки через нативный диалог
 async function selectFolder() {
     try {
         const result = await pywebview.api.select_folder();
-        
         if (result.success) {
             folderName.textContent = `Папка: ${result.name}`;
             startProcessing();
@@ -19,34 +16,23 @@ async function selectFolder() {
             alert('Ошибка: ' + result.error);
         }
     } catch (error) {
-        console.error('Error:', error);
         alert('Ошибка при выборе папки');
     }
 }
 
-// Запуск обработки
 async function startProcessing() {
     progressSection.style.display = 'block';
     getTxtBtn.disabled = true;
     resultInfo.textContent = '';
     
     try {
-        const response = await fetch('/api/process');
-        const data = await response.json();
-        
-        if (data.error) {
-            alert('Ошибка: ' + data.error);
-            return;
-        }
-        
+        await fetch('/api/process');
         pollProgress();
     } catch (error) {
-        console.error('Error:', error);
         alert('Ошибка при запуске');
     }
 }
 
-// Опрос прогресса
 function pollProgress() {
     const interval = setInterval(async () => {
         try {
@@ -55,30 +41,32 @@ function pollProgress() {
             
             updateProgress(data.value);
             
-            if (data.status === 'done') {
+            if (data.status === 'done' && data.result) {
                 clearInterval(interval);
                 getTxtBtn.disabled = false;
-                const result = data.result;
-                resultInfo.textContent = `✅ Готово! Найдено: ${result.good} из ${result.total}`;
+                const r = data.result;
+                resultInfo.innerHTML = `
+                    ✅ Готово!<br>
+                    📊 Всего: ${r.total}<br>
+                    ✅ Хороших: ${r.good}<br>
+                    ❌ Плохих: ${r.bad}
+                `;
             } else if (data.status === 'error') {
                 clearInterval(interval);
                 resultInfo.textContent = '❌ Ошибка: ' + data.error;
             }
         } catch (error) {
-            console.error('Poll error:', error);
             clearInterval(interval);
         }
     }, 500);
 }
 
-// Обновление прогресс-бара
 function updateProgress(percent) {
     progressPercent.textContent = percent;
     progressPercentRight.textContent = percent + '%';
     progressFill.style.width = percent + '%';
 }
 
-// Скачивание TXT
 async function getTxt() {
     try {
         const response = await fetch('/api/download_txt');
@@ -92,11 +80,9 @@ async function getTxt() {
             a.download = data.filename || 'good_photos.txt';
             a.click();
             window.URL.revokeObjectURL(url);
-            
-            resultInfo.textContent = '✅ Файл скачан!';
+            resultInfo.innerHTML += '<br>✅ Файл скачан!';
         }
     } catch (error) {
-        console.error('Error:', error);
         alert('Ошибка скачивания');
     }
 }
